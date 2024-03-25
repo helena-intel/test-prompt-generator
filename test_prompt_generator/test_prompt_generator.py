@@ -101,6 +101,14 @@ def generate_prompt(
         )
 
     prompt = tokenizer.decode(tokens[:num_tokens_from_source], skip_special_tokens=True)
+
+    # If a prompt ends with a space, t5 will drop that from tokenization and the prompt will
+    # not have enough tokens. Just increasing num_tokens_from_source doesn't help because
+    # then a space and a new word will be added, making a prompt with too many tokens.
+    # This solution is not great, but it's simple and works.
+    if prompt.endswith(" ") and "t5" in tokenizer_id:
+        prompt = prompt[:-1] + "."
+
     if "chatglm" in tokenizer_id:
         # chatglm adds these tokens even when skip_special_tokens=True
         prompt = prompt.replace("[gMASK] sop ", "")

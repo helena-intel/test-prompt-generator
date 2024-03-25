@@ -47,7 +47,7 @@ class PromptGeneratorTest(unittest.TestCase):
     @parameterized.expand(_preset_tokenizers.items())
     def test_prompt_generator_from_preset(self, preset_name, tokenizer_id):
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, trust_remote_code=True)
-        for num_tokens in 32, 55, 1029:
+        for num_tokens in 16, 32, 64, 128, 256, 512, 768, 1024, 2048:
             prompt = generate_prompt(preset_name, num_tokens)
             tokens = tokenizer(prompt)["input_ids"]
             self.assertEqual(len(tokens), num_tokens)

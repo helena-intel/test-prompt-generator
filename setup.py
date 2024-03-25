@@ -6,7 +6,7 @@ from setuptools import find_packages, setup
 version = "0.1"
 try:
     repo_root = os.path.dirname(os.path.realpath(__file__))
-    commit_id = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=repo_root, text=True).stdout
+    commit_id = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
     version += f"+{commit_id}"
 except subprocess.CalledProcessError:
     pass
