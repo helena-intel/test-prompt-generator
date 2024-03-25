@@ -1,5 +1,1 @@
-{
-  "prompt": "Alice was beginning to get very tired of sitting by her sister on the bank,",
-  "model_id": "Qwen/Qwen1.5-7B-Chat",
-  "num_tokens": 16
-}
+{"prompt": "Alice was beginning to get very tired of sitting by her sister on the bank,", "model_id": "Qwen/Qwen1.5-7B-Chat", "num_tokens": 16}

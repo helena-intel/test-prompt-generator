@@ -1,5 +1,1 @@
-{
-  "prompt": "Alice was beginning to get very tired of sitting by her sister on the bank",
-  "model_id": "google-t5/t5-base",
-  "num_tokens": 16
-}
+{"prompt": "Alice was beginning to get very tired of sitting by her sister on the bank", "model_id": "google-t5/t5-base", "num_tokens": 16}

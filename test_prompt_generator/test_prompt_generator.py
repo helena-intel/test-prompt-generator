@@ -127,7 +127,7 @@ def generate_prompt(
         }
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
         with open(output_file, "w") as f:
-            json.dump(prompt_dict, f, ensure_ascii=False, indent=2)
+            json.dump(prompt_dict, f, ensure_ascii=False)
 
     return prompt
 

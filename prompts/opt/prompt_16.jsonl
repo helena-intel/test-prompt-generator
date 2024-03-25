@@ -1,5 +1,1 @@
-{
-  "prompt": "Alice was beginning to get very tired of sitting by her sister on the bank",
-  "model_id": "facebook/opt-2.7b",
-  "num_tokens": 16
-}
+{"prompt": "Alice was beginning to get very tired of sitting by her sister on the bank", "model_id": "facebook/opt-2.7b", "num_tokens": 16}
