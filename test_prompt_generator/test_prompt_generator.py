@@ -8,6 +8,7 @@ import logging
 import re
 import warnings
 from pathlib import Path
+from typing import List, Union
 
 from transformers import AutoTokenizer
 
@@ -18,27 +19,33 @@ logging.basicConfig(level=logging.INFO)
 # there can always be model implementations that do things differently.
 _preset_tokenizers = {
     "bert": "google-bert/bert-base-uncased",
+    "blenderbot": "facebook/blenderbot-3B",
     "bloom": "bigscience/bloom-560m",
-    "gemma": "fxmarty/tiny-random-GemmaForCausalLM",
+    "bloomz": "bigscience/bloomz-7b1",
     "chatglm3": "THUDM/chatglm3-6b",
     "falcon": "tiiuae/falcon-7b",
+    "gemma": "fxmarty/tiny-random-GemmaForCausalLM",
     "gpt-neox": "EleutherAI/gpt-neox-20b",
     "llama": "TinyLlama/TinyLlama-1.1B-Chat-v0.6",
     "magicoder": "ise-uiuc/Magicoder-S-DS-6.7B",
     "mistral": "mistralai/Mistral-7B-v0.1",
+    "mpt": "mosaicml/mpt-7b",
     "opt": "facebook/opt-2.7b",
     "phi-2": "microsoft/phi-2",
     "pythia": "EleutherAI/pythia-1.4b-deduped",
-    "roberta": "FacebookAI/roberta-base",
     "qwen": "Qwen/Qwen1.5-7B-Chat",
+    "redpajama": "togethercomputer/RedPajama-INCITE-Chat-3B-v1",
+    "roberta": "FacebookAI/roberta-base",
     "starcoder": "bigcode/starcoder2-7b",
     "t5": "google-t5/t5-base",
+    "vicuna": "lmsys/vicuna-7b-v1.5",
+    "zephyr": "HuggingFaceH4/zephyr-7b-beta",
 }
 
 
 def generate_prompt(
     tokenizer_id: str,
-    num_tokens: int,
+    num_tokens: Union[List[int], int],
     prefix: str = None,
     output_file: str = None,
     overwrite=False,
@@ -46,13 +53,28 @@ def generate_prompt(
     source_text_file: str = None,
     source_text: str = None,
 ):
+    ### Validate inputs
+    if isinstance(num_tokens, int):
+        num_tokens = [
+            num_tokens,
+        ]
     if source_text == "":
         source_text = None
     if source_text_file == "":
         source_text_file = None
-
     if source_text_file is not None and source_text is not None:
         raise ValueError("Only one of `source_text` or `source_text_file` should be provided.")
+
+    if len(num_tokens) > 1 and output_file is None:
+        raise ValueError("When generating multiple prompts, output_file should be provided.")
+
+    ### Load tokenizer
+    if tokenizer_id in _preset_tokenizers:
+        tokenizer_id = _preset_tokenizers[tokenizer_id]
+
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, trust_remote_code=True)
+
+    ### Generate source text
     if source_text_file is None and source_text is None:
         source_text_file = Path(__file__).parent / "text_files" / "alice.txt"
 
@@ -61,83 +83,89 @@ def generate_prompt(
         if verbose:
             logging.info(f"Generating prompts from {source_text_file}")
 
-    if tokenizer_id in _preset_tokenizers:
-        tokenizer_id = _preset_tokenizers[tokenizer_id]
-
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, trust_remote_code=True)
-
-    num_tokens_from_source = num_tokens
-    if tokenizer("hello")["input_ids"][-1] in tokenizer.all_special_ids:
-        # The tokenizer adds a special token to the end of the sentence, so if
-        # num_tokens = N, we need to get N-1 tokens from the input_text
-        num_tokens_from_source -= 1
-
     if prefix is not None:
         prefix_tokens = tokenizer(prefix)["input_ids"]
         prefix_num_tokens = len(prefix_tokens)
-        if prefix_num_tokens > num_tokens:
+        if prefix_num_tokens > min(num_tokens):
             logging.warning(
-                f"Requested number of tokens {num_tokens} is smaller than "
+                f"Requested number of tokens {min(num_tokens)} is smaller than "
                 f"number of prefix tokens: {prefix_num_tokens}"
             )
-        source_text = prefix + " " + source_text
+
+        source_text = prefix.strip() + " " + source_text
+
     # Some tokenizers treat "\n\n" at the end of a sentence differently than in the middle;
     # replace consecutive "\n" with 1 to prevent generating an incorrect number of tokens
     source_text = re.sub(r"\n+", "\n", source_text)
 
-    # prevent warnings about too many tokens from tokenizing the entire source text
+    # Try to prevent warnings about too many tokens from tokenizing the entire source text
     tokenizer.model_max_num_tokens = 10000
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message=".*Token indices.*")
-
         inputs = tokenizer(source_text)
 
     tokens = inputs["input_ids"]
     total_tokens = len(tokens)
-    prompt = None
-    if num_tokens > total_tokens:
+    if max(num_tokens) > total_tokens:
         raise ValueError(
-            f"Cannot generate prompt with {num_tokens} tokens because the source text contains {total_tokens} tokens."
+            f"Cannot generate prompt with {max(num_tokens)} tokens; the source text contains {total_tokens} tokens."
         )
 
-    prompt = tokenizer.decode(tokens[:num_tokens_from_source], skip_special_tokens=True)
+    for i, tok in enumerate(num_tokens):
+        num_tokens_from_source = tok
+        if tokenizer("hello")["input_ids"][-1] in tokenizer.all_special_ids:
+            # The tokenizer adds a special token to the end of the sentence, so if
+            # num_tokens == N, we need to get N-1 tokens from the input_text
+            num_tokens_from_source -= 1
 
-    # If a prompt ends with a space, t5 will drop that from tokenization and the prompt will
-    # not have enough tokens. Just increasing num_tokens_from_source doesn't help because
-    # then a space and a new word will be added, making a prompt with too many tokens.
-    # This solution is not great, but it's simple and works.
-    if prompt.endswith(" ") and "t5" in tokenizer_id:
-        prompt = prompt[:-1] + "."
+        ### Generate prompt
+        prompt = tokenizer.decode(tokens[:num_tokens_from_source], skip_special_tokens=True)
 
-    if "chatglm" in tokenizer_id:
-        # chatglm adds these tokens even when skip_special_tokens=True
-        prompt = prompt.replace("[gMASK] sop ", "")
+        ### Postprocessing
+        if prompt.endswith(" ") and "t5" in tokenizer_id:
+            # If a prompt ends with a space, t5 will drop that from tokenization and the prompt will
+            # not have enough tokens. Just increasing num_tokens_from_source doesn't help because
+            # then a space and a new word will be added, making a prompt with too many tokens.
+            # This solution is not great, but it's simple and works.
+            prompt = prompt[:-1] + "."
 
-    if prompt is None:
-        raise RuntimeError(f"Generating prompt with {num_tokens} tokens failed")
+        if "chatglm" in tokenizer_id:
+            # chatglm adds these tokens even when skip_special_tokens=True
+            prompt = prompt.replace("[gMASK] sop ", "")
 
-    prompt_tokens = tokenizer(prompt)
-    if len(prompt_tokens["input_ids"]) != num_tokens:
-        print("prompt", repr(prompt))
-        print("prompt_tokens", prompt_tokens["input_ids"])
-        print("source_tokens", tokens[:num_tokens])
-        raise RuntimeError(
-            f"Expected {num_tokens} tokens, got {len(prompt_tokens['input_ids'])}. Tokenizer: {tokenizer_id}"
-        )
+        ### Validation
+        prompt_tokens = tokenizer(prompt)
+        if len(prompt_tokens["input_ids"]) != tok:
+            print("prompt", repr(prompt))
+            print("prompt_tokens", prompt_tokens["input_ids"])
+            print("source_tokens", tokens[:num_tokens_from_source])
+            raise RuntimeError(
+                f"Expected {tok} tokens, got {len(prompt_tokens['input_ids'])}. Tokenizer: {tokenizer_id}"
+            )
 
-    if output_file is not None:
-        if (Path(output_file).exists()) and (not overwrite):
-            raise FileExistsError(f"{output_file} already exists. Set overwrite to allow overwriting.")
+        ### Write output file
+
         prompt_dict = {
             "prompt": prompt,
             "model_id": tokenizer_id,
-            "num_tokens": num_tokens,
+            "token_size": tok,
         }
-        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-        with open(output_file, "w") as f:
-            json.dump(prompt_dict, f, ensure_ascii=False)
 
-    return prompt
+        if output_file is not None:
+            if i == 0:
+                if (Path(output_file).exists()) and (not overwrite):
+                    raise FileExistsError(f"{output_file} already exists. Set overwrite to allow overwriting.")
+                Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+
+                with open(output_file, "w") as f:
+                    json.dump(prompt_dict, f, ensure_ascii=False)
+            else:
+                with open(output_file, "a") as f:
+                    f.write("\n")
+                    json.dump(prompt_dict, f, ensure_ascii=False)
+
+        if len(num_tokens) == 1:
+            return prompt
 
 
 def main():
@@ -156,7 +184,9 @@ def main():
         "--num_tokens",
         required=True,
         type=int,
-        help="Number of tokens the generated prompt should have",
+        nargs="*",
+        help="Number of tokens the generated prompt should have. To specify multiple token sizes, "
+        "use e.g. `-n 16 32` and include `--output_file`",
     )
     parser.add_argument(
         "-p",

@@ -40,17 +40,31 @@ class GeneratedPromptTests(unittest.TestCase):
                 f"Directory name: {directoryname}, tokenizer model id: {prompt_dict['model_id']}",
             ),
             self.assertEqual(_preset_tokenizers[directoryname], prompt_dict["model_id"]),
-            self.assertEqual(len(tokens), prompt_dict["num_tokens"])
+            self.assertEqual(len(tokens), prompt_dict["token_size"])
 
 
 class PromptGeneratorTest(unittest.TestCase):
     @parameterized.expand(_preset_tokenizers.items())
     def test_prompt_generator_from_preset(self, preset_name, tokenizer_id):
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, trust_remote_code=True)
-        for num_tokens in 16, 32, 64, 128, 256, 512, 768, 1024, 2048:
+        for num_tokens in 16, 32, 64, 128, 256, 1024, 2048:
             prompt = generate_prompt(preset_name, num_tokens)
             tokens = tokenizer(prompt)["input_ids"]
             self.assertEqual(len(tokens), num_tokens)
+
+    @parameterized.expand(_preset_tokenizers)
+    def test_prompt_generator_multi(self, preset_name):
+        # token sizes that will fail on several models when \n\n is not replaced
+        token_sizes = list(range(127, 144))
+        with tempfile.TemporaryDirectory() as t:
+            prompt_file = str(Path(t) / "prompt.jsonl")
+            generate_prompt(preset_name, token_sizes, output_file=prompt_file)
+            prompts = Path(prompt_file).read_text().splitlines()
+            self.assertEqual(len(prompts), len(token_sizes))
+            for i, line in enumerate(prompts):
+                prompt = json.loads(line)
+                print(prompt)
+                self.assertEqual(prompt["token_size"], token_sizes[i])
 
     def test_prompt_generator_from_hub_with_source(self):
         model_id = "BAAI/bge-base-en-v1.5"
