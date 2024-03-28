@@ -52,12 +52,11 @@ def generate_prompt(
     verbose: bool = False,
     source_text_file: str = None,
     source_text: str = None,
+    return_type: str = None,
 ):
     ### Validate inputs
     if isinstance(num_tokens, int):
-        num_tokens = [
-            num_tokens,
-        ]
+        num_tokens = [num_tokens]
     if source_text == "":
         source_text = None
     if source_text_file == "":
@@ -65,8 +64,10 @@ def generate_prompt(
     if source_text_file is not None and source_text is not None:
         raise ValueError("Only one of `source_text` or `source_text_file` should be provided.")
 
-    if len(num_tokens) > 1 and output_file is None:
-        raise ValueError("When generating multiple prompts, output_file should be provided.")
+    if return_type is None:
+        return_type = "string" if len(num_tokens) == 1 else "dict"
+    if return_type not in ("string", "dict"):
+        raise ValueError("return_type should be 'string', 'dict' or None")
 
     ### Load tokenizer
     if tokenizer_id in _preset_tokenizers:
@@ -88,8 +89,7 @@ def generate_prompt(
         prefix_num_tokens = len(prefix_tokens)
         if prefix_num_tokens > min(num_tokens):
             logging.warning(
-                f"Requested number of tokens {min(num_tokens)} is smaller than "
-                f"number of prefix tokens: {prefix_num_tokens}"
+                f"Requested number of tokens {min(num_tokens)} is smaller than " f"number of prefix tokens: {prefix_num_tokens}"
             )
 
         source_text = prefix.strip() + " " + source_text
@@ -107,10 +107,9 @@ def generate_prompt(
     tokens = inputs["input_ids"]
     total_tokens = len(tokens)
     if max(num_tokens) > total_tokens:
-        raise ValueError(
-            f"Cannot generate prompt with {max(num_tokens)} tokens; the source text contains {total_tokens} tokens."
-        )
+        raise ValueError(f"Cannot generate prompt with {max(num_tokens)} tokens; the source text contains {total_tokens} tokens.")
 
+    prompt_dicts = []
     for i, tok in enumerate(num_tokens):
         num_tokens_from_source = tok
         if tokenizer("hello")["input_ids"][-1] in tokenizer.all_special_ids:
@@ -139,33 +138,30 @@ def generate_prompt(
             print("prompt", repr(prompt))
             print("prompt_tokens", prompt_tokens["input_ids"])
             print("source_tokens", tokens[:num_tokens_from_source])
-            raise RuntimeError(
-                f"Expected {tok} tokens, got {len(prompt_tokens['input_ids'])}. Tokenizer: {tokenizer_id}"
-            )
+            raise RuntimeError(f"Expected {tok} tokens, got {len(prompt_tokens['input_ids'])}. Tokenizer: {tokenizer_id}")
 
         ### Write output file
-
         prompt_dict = {
             "prompt": prompt,
             "model_id": tokenizer_id,
             "token_size": tok,
         }
+        prompt_dicts.append(prompt_dict)
 
-        if output_file is not None:
-            if i == 0:
-                if (Path(output_file).exists()) and (not overwrite):
-                    raise FileExistsError(f"{output_file} already exists. Set overwrite to allow overwriting.")
-                Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+    jsonl_result = "\n".join(json.dumps(item) for item in prompt_dicts)
 
-                with open(output_file, "w") as f:
-                    json.dump(prompt_dict, f, ensure_ascii=False)
-            else:
-                with open(output_file, "a") as f:
-                    f.write("\n")
-                    json.dump(prompt_dict, f, ensure_ascii=False)
+    if output_file is not None:
+        if (Path(output_file).exists()) and (not overwrite):
+            raise FileExistsError(f"{output_file} already exists. Set overwrite to allow overwriting.")
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
 
-        if len(num_tokens) == 1:
-            return prompt
+        with open(output_file, "w") as f:
+            f.write(f"{jsonl_result}\n")
+
+    if return_type == "string":
+        return prompt if len(num_tokens) == 1 else "\n".join(item["prompt"] for item in prompt_dicts)
+    else:
+        return prompt_dict if len(num_tokens) == 1 else prompt_dicts
 
 
 def main():
@@ -218,7 +214,7 @@ def main():
     if args.verbose:
         logging.info(f"Command line arguments: {args}")
 
-    return generate_prompt(
+    result = generate_prompt(
         tokenizer_id=args.tokenizer,
         num_tokens=args.num_tokens,
         prefix=args.prefix,
@@ -227,6 +223,7 @@ def main():
         verbose=args.verbose,
         source_text_file=args.file,
     )
+    return result
 
 
 if __name__ == "__main__":
