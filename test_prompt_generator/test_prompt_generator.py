@@ -53,6 +53,7 @@ def generate_prompt(
     source_text_file: str = None,
     source_text: str = None,
     return_type: str = None,
+    no_length_check=False,
 ):
     ### Validate inputs
     if isinstance(num_tokens, int):
@@ -132,19 +133,29 @@ def generate_prompt(
             # chatglm adds these tokens even when skip_special_tokens=True
             prompt = prompt.replace("[gMASK] sop ", "")
 
+        # Workaround for in-development tokenizers
+        regex = r"^(<\|[a-z]+_of_text\|>).*"
+        special_tokens = re.findall(regex, prompt)
+        for special_token in special_tokens:
+            prompt = prompt.replace(special_token, "")
+
         ### Validation
         prompt_tokens = tokenizer(prompt)
         if len(prompt_tokens["input_ids"]) != tok:
             print("prompt", repr(prompt))
             print("prompt_tokens", prompt_tokens["input_ids"])
             print("source_tokens", tokens[:num_tokens_from_source])
-            raise RuntimeError(f"Expected {tok} tokens, got {len(prompt_tokens['input_ids'])}. Tokenizer: {tokenizer_id}")
+            message = f"Expected {tok} tokens, got {len(prompt_tokens['input_ids'])}. Tokenizer: {tokenizer_id}"
+            if no_length_check:
+                logging.error(message)
+            else:
+                raise RuntimeError(message)
 
         ### Write output file
         prompt_dict = {
             "prompt": prompt,
             "model_id": tokenizer_id,
-            "token_size": tok,
+            "token_size": len(prompt_tokens["input_ids"]),
         }
         prompt_dicts.append(prompt_dict)
 
@@ -209,6 +220,7 @@ def main():
         required=False,
         help="Optional: path to text file to generate prompts from. Default text_files/alice.txt",
     )
+    parser.add_argument("--no-length-check", action="store_true", help="Do not fail if generated prompt has the wrong length.")
 
     args = parser.parse_args()
     if args.verbose:
@@ -222,6 +234,7 @@ def main():
         overwrite=args.overwrite,
         verbose=args.verbose,
         source_text_file=args.file,
+        no_length_check=args.no_length_check,
     )
     return result
 
