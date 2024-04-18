@@ -81,7 +81,7 @@ def generate_prompt(
         source_text_file = Path(__file__).parent / "text_files" / "alice.txt"
 
     if source_text is None:
-        source_text = Path(source_text_file).read_text()
+        source_text = Path(source_text_file).read_text(encoding="utf-8")
         if verbose:
             logging.info(f"Generating prompts from {source_text_file}")
 

@@ -19,15 +19,17 @@ jobs:
   build:
     strategy:
       fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: "3.10"
+        python-version: "3.8"
     - name: Install package and dependencies
       run: |
         pip install .
