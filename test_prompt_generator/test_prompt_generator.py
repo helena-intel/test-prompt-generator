@@ -28,7 +28,7 @@ _preset_tokenizers = {
     "gpt-neox": "EleutherAI/gpt-neox-20b",
     "llama": "TinyLlama/TinyLlama-1.1B-Chat-v0.6",
     "magicoder": "ise-uiuc/Magicoder-S-DS-6.7B",
-    "mistral": "mistralai/Mistral-7B-v0.1",
+    "mistral": "echarlaix/tiny-random-mistral",
     "mpt": "mosaicml/mpt-7b",
     "opt": "facebook/opt-2.7b",
     "phi-2": "microsoft/phi-2",
