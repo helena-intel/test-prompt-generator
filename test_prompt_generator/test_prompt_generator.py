@@ -98,6 +98,7 @@ def generate_prompt(
     # Some tokenizers treat "\n\n" at the end of a sentence differently than in the middle;
     # replace consecutive "\n" with 1 to prevent generating an incorrect number of tokens
     source_text = re.sub(r"\n+", "\n", source_text)
+    source_text = source_text.replace(r'"', "'")
 
     # Try to prevent warnings about too many tokens from tokenizing the entire source text
     tokenizer.model_max_num_tokens = 10000
@@ -159,7 +160,7 @@ def generate_prompt(
         }
         prompt_dicts.append(prompt_dict)
 
-    jsonl_result = "\n".join(json.dumps(item, ensure_ascii=False) for item in prompt_dicts)
+    jsonl_result = "\n".join(json.dumps(item) for item in prompt_dicts)
 
     if output_file is not None:
         if (Path(output_file).exists()) and (not overwrite):
