@@ -159,7 +159,7 @@ def generate_prompt(
         }
         prompt_dicts.append(prompt_dict)
 
-    jsonl_result = "\n".join(json.dumps(item) for item in prompt_dicts)
+    jsonl_result = "\n".join(json.dumps(item, ensure_ascii=False) for item in prompt_dicts)
 
     if output_file is not None:
         if (Path(output_file).exists()) and (not overwrite):
