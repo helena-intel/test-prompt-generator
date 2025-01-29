@@ -46,7 +46,7 @@ def test_precreated_prompts(prompt_dir):
 @pytest.mark.parametrize("preset_name,tokenizer_id", test_tokenizers)
 def test_prompt_generator_from_preset(preset_name, tokenizer_id):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, trust_remote_code=True)
-    for num_tokens in 16, 32, 64, 256, 1024, 2048:
+    for num_tokens in 16, 64, 256, 1024, 2048, 4096:
         prompt = generate_prompt(preset_name, num_tokens)
         tokens = tokenizer(prompt)["input_ids"]
         assert len(tokens) == num_tokens
