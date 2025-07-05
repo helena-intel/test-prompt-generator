@@ -9,7 +9,7 @@ from transformers import AutoTokenizer
 from test_prompt_generator import generate_prompt
 from test_prompt_generator.test_prompt_generator import _preset_tokenizers
 
-prompts_root = Path(__file__).parents[1] / "prompts"
+prompts_root = Path(__file__).parents[1] / "prompts/jsonl"
 prompt_dirs = [p for p in prompts_root.iterdir() if p.is_dir()]
 
 sample_text = """Emma Woodhouse, handsome, clever, and rich, with a comfortable home and happy disposition, seemed to
@@ -22,7 +22,7 @@ ago for her to have more than an indistinct remembrance of her caresses; and her
 woman as governess, who had fallen little short of a mother in affection."""
 
 test_tokenizers = [
-    pytest.param(key, value, marks=pytest.mark.quicktest) if key == "falcon" else (key, value) for key, value in _preset_tokenizers.items()
+    pytest.param(key, value, marks=pytest.mark.quicktest) if key == "llama-3" else (key, value) for key, value in _preset_tokenizers.items()
 ]
 
 
@@ -35,7 +35,7 @@ def test_precreated_prompts(prompt_dir):
 
         tokenizer = AutoTokenizer.from_pretrained(prompt_dict["model_id"], trust_remote_code=True)
         tokens = tokenizer(prompt_dict["prompt"])["input_ids"]
-        directoryname = jsonfile.parent.stem.lower()
+        directoryname = jsonfile.parent.name.lower()
         assert (
             directoryname in prompt_dict["model_id"].lower()
         ), f"Directory name: {directoryname}, tokenizer model id: {prompt_dict['model_id']}"
