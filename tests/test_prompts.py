@@ -4,31 +4,36 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from transformers import AutoTokenizer
-
 from test_prompt_generator import generate_prompt
 from test_prompt_generator.test_prompt_generator import _preset_tokenizers
+from transformers import AutoTokenizer
 
-prompts_root = Path(__file__).parents[1] / "prompts/jsonl"
-prompt_dirs = [p for p in prompts_root.iterdir() if p.is_dir()]
+prompts_root = Path(__file__).parents[1] / "prompts"
+prompt_dirs = list(prompts_root.glob("**/jsonl/*"))
 
 sample_text = """Emma Woodhouse, handsome, clever, and rich, with a comfortable home and happy disposition, seemed to
 unite some of the best blessings of existence; and had lived nearly twenty-one years in the world with very little to
 distress or vex her.
 
 She was the youngest of the two daughters of a most affectionate, indulgent father; and had, in
-consequence of her sister’s marriage, been mistress of his house from a very early period. Her mother had died too long
+consequence of her sisterâ€™s marriage, been mistress of his house from a very early period. Her mother had died too long
 ago for her to have more than an indistinct remembrance of her caresses; and her place had been supplied by an excellent
 woman as governess, who had fallen little short of a mother in affection."""
+
+files_root = Path(__file__).parents[1] / "test_prompt_generator/text_files"
+source_files = {"en": files_root / "alice.txt", "zh": files_root / "watermargin.txt"}
 
 test_tokenizers = [
     pytest.param(key, value, marks=pytest.mark.quicktest) if key == "llama-3" else (key, value) for key, value in _preset_tokenizers.items()
 ]
 
+test_source_files = [
+    pytest.param(key, value, marks=pytest.mark.quicktest) if key == "llama-3" else (key, value) for key, value in source_files.items()
+]
+
 
 @pytest.mark.parametrize("prompt_dir", [pytest.param(prompt_dirs[0], marks=pytest.mark.quicktest), *prompt_dirs])
 def test_precreated_prompts(prompt_dir):
-    print(prompt_dir)
     for jsonfile in prompt_dir.glob("*.jsonl"):
         with open(jsonfile) as f:
             prompt_dict = json.load(f)
@@ -44,10 +49,13 @@ def test_precreated_prompts(prompt_dir):
 
 
 @pytest.mark.parametrize("preset_name,tokenizer_id", test_tokenizers)
-def test_prompt_generator_from_preset(preset_name, tokenizer_id):
+@pytest.mark.parametrize("lang,source_file", test_source_files)
+def test_prompt_generator_from_preset(preset_name, tokenizer_id, lang, source_file):
+    if preset_name in ("bert", "t5", "blenderbot") and lang == "zh":
+        pytest.skip(f"{preset_name} is not supported with Chinese source text")
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, trust_remote_code=True)
     for num_tokens in 16, 64, 256, 1024, 2048, 4096:
-        prompt = generate_prompt(preset_name, num_tokens)
+        prompt = generate_prompt(preset_name, num_tokens, source_text_file=source_file)
         tokens = tokenizer(prompt)["input_ids"]
         assert len(tokens) == num_tokens
 
@@ -63,7 +71,6 @@ def test_prompt_generator_multi(preset_name, tokenizer_id):
         assert len(prompts) == len(token_sizes)
         for i, line in enumerate(prompts):
             prompt = json.loads(line)
-            print(prompt)
             assert prompt["token_size"] == token_sizes[i]
 
 

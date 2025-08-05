@@ -1,6 +1,8 @@
 # Prompts
 
 This directory contains pre-created prompts for popular model architectures for several token sizes in .txt and .jsonl format.
+English prompts are in the "en" subdirectory, Chinese prompts in "zh".
+
 The following preset tokenizers were used to create these prompts:
 
 | preset     | model_id
